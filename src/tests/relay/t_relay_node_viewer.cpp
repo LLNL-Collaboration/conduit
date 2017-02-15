@@ -50,6 +50,8 @@
 
 #include "conduit_relay.hpp"
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include "gtest/gtest.h"
 
 #include "t_config.hpp"
@@ -76,6 +78,13 @@ TEST(conduit_relay_web, node_viewer)
     EXPECT_EQ(n->fetch("a").as_uint32(), a_val);
     EXPECT_EQ(n->fetch("b").as_uint32(), b_val);
     
+    std::ifstream blueprint("blueprint.json");
+    std::stringstream buffer;
+    buffer << blueprint.rdbuf();
+
+    Node *blueprint_node = new Node(buffer.str(), NULL, false);
+    EXPECT_EQ(blueprint_node->fetch("path").to_json().c_str(), "coordsets/coords");
+
     if(launch_server)
     {
         web::NodeViewerServer svr;

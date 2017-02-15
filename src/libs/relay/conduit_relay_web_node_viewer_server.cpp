@@ -131,7 +131,7 @@ NodeViewerRequestHandler::handle_request(WebServer *server,
     std::string uri_next;
     utils::rsplit_string(uri,"/",uri_cmd,uri_next);
     
-    if(uri_cmd == "get-schema")
+    if(uri_cmd == "get-schema" || uri_cmd == "get-blueprint-mesh")
     {
         return handle_get_schema(conn);
     }
