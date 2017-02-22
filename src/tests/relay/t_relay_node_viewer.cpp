@@ -90,7 +90,7 @@ TEST(conduit_relay_web, node_viewer)
     if(launch_server)
     {
         web::NodeViewerServer svr;
-        svr.set_port(8080);
+        svr.set_port(3000);
         svr.set_node(n);
                   
         if(use_ssl)
