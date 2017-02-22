@@ -91,7 +91,7 @@ TEST(conduit_relay_web, node_viewer)
     {
         web::NodeViewerServer svr;
         svr.set_port(3000);
-        svr.set_node(n);
+        svr.set_node(&blueprint_node);
                   
         if(use_ssl)
         {
@@ -153,5 +153,4 @@ int main(int argc, char* argv[])
     result = RUN_ALL_TESTS();
     return result;
 }
-
 
