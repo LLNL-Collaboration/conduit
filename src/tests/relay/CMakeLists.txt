@@ -52,7 +52,8 @@
 set(RELAY_TESTS t_relay_smoke
                 t_relay_io_basic
                 t_relay_node_viewer
-                t_relay_websocket)
+                t_relay_websocket
+		t_relay_blueprint_websocket)
 
 ################################
 # Optional Unit Tests
