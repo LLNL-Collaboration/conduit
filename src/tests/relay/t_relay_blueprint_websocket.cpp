@@ -28,7 +28,7 @@ TEST(conduit_relay_web_websocket, websocket_test)
                                                    "blueprint_websocket");
 
     std::string example_blueprint_mesh_path = utils::join_file_path(wsock_path,
-                                                         "blueprint.json");
+                                                         "blueprint_box.json");
 
     std::ifstream blueprint(example_blueprint_mesh_path);
     std::stringstream buffer;
@@ -37,10 +37,19 @@ TEST(conduit_relay_web_websocket, websocket_test)
     Node blueprint_node;
     Generator g(buffer.str(), "json", NULL);
     g.walk(blueprint_node);
-    EXPECT_EQ(blueprint_node.fetch("topologies/mesh/path").to_json(),
-                                                     "\"topologies/mesh\"");
-    blueprint_node.to_json_stream("test.json","json");
-
+    EXPECT_EQ(blueprint_node.fetch("topologies/domain0/type").to_json(),
+                                                     "\"unstructured\"");
+    //blueprint_node.to_json_stream("test.json","json");
+    
+    /*
+    double new_y [] = {-1.0, -1.0, -1.0, -0.5, -0.5, -0.5, 0.0, 0.0, 0.0};
+    for (int i = 0; i < 9; i++) {
+        Node &list_entry = blueprint_node["coordsets/domain0/values/y"].append();
+	list_entry.set(new_y[i]);
+    }
+				            
+    blueprint_node.print();
+    */
 
     // setup the webserver
     web::WebServer svr;
@@ -71,6 +80,14 @@ TEST(conduit_relay_web_websocket, websocket_test)
         
         // websocket() returns the first active websocket
         svr.websocket()->send(blueprint_node);
+	
+	double new_y [] = {-1.0, -1.0, -1.0, -0.5, -0.5, -0.5, 0.0, 0.0, 0.0};
+	for (int i = 0; i < 9; i++) {
+	    Node &list_entry = blueprint_node["coordsets/domain0/values/y"].append();
+	    list_entry.set(new_y[i]);
+	}
+	
+	//blueprint_node.print();
         // or with a very short timeout
         //svr.websocket(10,100)->send(msg);
         
@@ -82,7 +99,6 @@ TEST(conduit_relay_web_websocket, websocket_test)
 int main(int argc, char* argv[])
 {
     int result = 0;
-    std::cout << argc << std::endl;
 
     ::testing::InitGoogleTest(&argc, argv);
     
