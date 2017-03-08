@@ -91,7 +91,7 @@ TEST(conduit_relay_web_websocket, websocket_test)
 	    hasUpdated = true;
 	}
 	
-	blueprint_node.print();
+	//blueprint_node.print();
         // or with a very short timeout
         //svr.websocket(10,100)->send(msg);
         
