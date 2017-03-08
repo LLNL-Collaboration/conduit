@@ -73,7 +73,9 @@ TEST(conduit_relay_web_websocket, websocket_test)
     svr.set_document_root(wsock_path);
 
     svr.serve();
-
+    
+    double new_y [] = {-1.0, -1.0, -1.0, -0.5, -0.5, -0.5, 0.0, 0.0, 0.0};
+    bool hasUpdated = false;
     while(svr.is_running()) 
     {
         utils::sleep(1000);
@@ -81,10 +83,12 @@ TEST(conduit_relay_web_websocket, websocket_test)
         // websocket() returns the first active websocket
         svr.websocket()->send(blueprint_node);
 	
-	double new_y [] = {-1.0, -1.0, -1.0, -0.5, -0.5, -0.5, 0.0, 0.0, 0.0};
-	for (int i = 0; i < 9; i++) {
-	    Node &list_entry = blueprint_node["coordsets/domain0/values/y"].append();
-	    list_entry.set(new_y[i]);
+	if (!hasUpdated) {
+	    for (int i = 0; i < 9; i++) {
+		Node &list_entry = blueprint_node["coordsets/domain0/values/y"].append();
+		list_entry.set(new_y[i]);
+	    }
+	    hasUpdated = true;
 	}
 	
 	//blueprint_node.print();
