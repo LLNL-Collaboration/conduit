@@ -37,7 +37,7 @@ TEST(conduit_relay_web_websocket, websocket_test)
     Node blueprint_node;
     Generator g(buffer.str(), "json", NULL);
     g.walk(blueprint_node);
-    EXPECT_EQ(blueprint_node.fetch("topologies/domain0/type").to_json(),
+    EXPECT_EQ(blueprint_node.fetch("topologies/mesh/type").to_json(),
                                                      "\"unstructured\"");
     //blueprint_node.to_json_stream("test.json","json");
     
@@ -85,13 +85,13 @@ TEST(conduit_relay_web_websocket, websocket_test)
 	
 	if (!hasUpdated) {
 	    for (int i = 0; i < 9; i++) {
-		Node &list_entry = blueprint_node["coordsets/domain0/values/y"].append();
+		Node &list_entry = blueprint_node["coordsets/coords/values/y"].append();
 		list_entry.set(new_y[i]);
 	    }
 	    hasUpdated = true;
 	}
 	
-	//blueprint_node.print();
+	blueprint_node.print();
         // or with a very short timeout
         //svr.websocket(10,100)->send(msg);
         

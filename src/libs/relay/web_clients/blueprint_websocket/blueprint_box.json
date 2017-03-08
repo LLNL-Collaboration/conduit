@@ -1,22 +1,24 @@
 {
   "coordsets": 
   {
-    "domain0": 
+    "coords": 
     {
       "type": "explicit",
+      "path": "coordsets/coords",
       "values": 
       {
         "x": [0.0, 0.5, 1.0, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0],
         "y": [0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0]
-      }
+      },
+      "system": "xy"
     }
   },
   "topologies": 
   {
-    "domain0": 
+    "mesh":
     {
       "type": "unstructured",
-      "coordset": "domain0",
+      "coordset": "coords",
       "elements": 
       {
         "shape": "quad",
