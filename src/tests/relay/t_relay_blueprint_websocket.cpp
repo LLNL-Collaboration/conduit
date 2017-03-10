@@ -21,7 +21,7 @@ Node simulate(Node & blueprint_node) {
     //make a hard copy of the original blueprint_node;
     new_node.update(blueprint_node);
 
-    //shift r position by +1
+    //shift r position to the right by 1 unit
     float64 *new_r_ptr = new_node["coordsets"]["coords"]["values"]["r"].as_float64_ptr();
     index_t r_length = new_node["coordsets"]["coords"]["values"]["r"].dtype().number_of_elements();
     for(index_t i = 0; i < r_length; i++) {
@@ -139,21 +139,21 @@ TEST(conduit_relay_web_websocket, websocket_test)
     svr.serve();
 
     Node new_blueprint_node;
-    int initial_data = 0;
+    bool initial_data = true;
     while(svr.is_running()) 
     {
-        // send the initial copy
-        if(!initial_data) {
+        utils::sleep(2000);
+        if(initial_data) {
+	    // send the initial copy
             // websocket() returns the first active websocket
             svr.websocket()->send(blueprint_node);
-            initial_data = 1;        
+            initial_data = false;        
+        } else {
+	    //Update blueprint node simulation.
+	    new_blueprint_node.update(simulate(blueprint_node));
+	    svr.websocket()->send(generate_update_node(blueprint_node, new_blueprint_node));
+	    blueprint_node.update(new_blueprint_node);
         }
-        utils::sleep(2000);
-        //Update blueprint node simulation.
-        new_blueprint_node.update(simulate(blueprint_node));
-        svr.websocket()->send(generate_update_node(blueprint_node, new_blueprint_node));
-        blueprint_node.update(new_blueprint_node);
-        
     }
 }
 
@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
 
     ::testing::InitGoogleTest(&argc, argv);
 
-    for(int i=0; i < argc ; i++)
+    for(int i = 0; i < argc; i++)
     {
         std::string arg_str(argv[i]);
         if(arg_str == "launch")
