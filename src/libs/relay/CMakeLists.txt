@@ -145,7 +145,7 @@ endif()
 #
 # Link with conduit
 #
-target_link_libraries(conduit_relay PUBLIC conduit)
+target_link_libraries(conduit_relay PUBLIC conduit conduit_blueprint)
 
 ##################################
 # system dependencies for civetweb
