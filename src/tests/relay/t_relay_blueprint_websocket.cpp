@@ -58,37 +58,23 @@ Node generate_normal_update_node(Node & new_node) {
     Node update_node;
     update_node["normal_update"] = 1;
     //add connectivity values
-    int *new_conn_ptr = new_node["topologies"]["mesh"]["elements"]["connectivity"].as_int_ptr();
-    index_t conn_length = (index_t) new_node["topologies"]["mesh"]["elements"]["connectivity"].dtype().number_of_elements();
-    std::vector<int64> conn_vec;
-    for(index_t i = 0; i < conn_length; i++) {
-        conn_vec.push_back(new_conn_ptr[i]);
+    Node temp_conn = new_node["topologies/mesh/elements/connectivity"];
+    if(temp_conn.dtype().id() == DataType::INT32_ID) {
+        update_node["conn_value"] = temp_conn.as_int_array();    
+    } else if (temp_conn.dtype().id() == DataType::INT64_ID) {
+        update_node["conn_value"] = temp_conn.as_int64_array();    
+    } else {
+        std::cout<<"connectivity array data format is not supported."<<std::endl;
+        std::cout<<"omit update..."<<std::endl;
+        return update_node;
     }
-    update_node["conn_value"] = conn_vec;
-
-    //add r/z values
-    std::vector<float64> r_vec;
-    std::vector<float64> z_vec;
+    //add 2D-coords values
     std::vector<std::string> pos;
     pos = get_coord_type(new_node);
-    float64 *new_r_ptr = new_node["coordsets"]["coords"]["values"][pos[0]].as_float64_ptr();
-    float64 *new_z_ptr = new_node["coordsets"]["coords"]["values"][pos[1]].as_float64_ptr();
-    index_t rz_length = (index_t) new_node["coordsets"]["coords"]["values"][pos[1]].dtype().number_of_elements();
-    for(index_t i = 0; i < rz_length; i++) {
-        r_vec.push_back(new_r_ptr[i]);
-        z_vec.push_back(new_z_ptr[i]);
-    }
-    update_node[pos[0]]["value"] = r_vec;
-    update_node[pos[1]]["value"] = z_vec;
-    
+    update_node[pos[0]]["value"] = new_node["coordsets/coords/values"][pos[0]].as_double_array();
+    update_node[pos[1]]["value"] = new_node["coordsets/coords/values"][pos[1]].as_double_array();
     //add field values
-    float64 *new_field_ptr = new_node["fields"]["braid"]["values"].as_float64_ptr();
-    index_t field_length = (index_t) new_node["fields"]["braid"]["values"].dtype().number_of_elements();
-    std::vector<int64> field_vec;
-    for(index_t i = 0; i < field_length; i++) {
-        field_vec.push_back(new_field_ptr[i]);
-    }
-    update_node["field_value"] = field_vec;
+    update_node["field_value"] = new_node["fields"]["braid"]["values"].as_double_array();
     return update_node;
 }
 
@@ -133,8 +119,8 @@ std::vector<std::string> get_coord_type(Node & blueprint_node) {
         pos.push_back(std::string("y"));
     }
     else {
-        pos.push_back(std::string("r"));
         pos.push_back(std::string("z"));
+        pos.push_back(std::string("r"));
     }
     return pos;
 }
@@ -143,7 +129,8 @@ void generate_node_from_json(Node & blueprint_node, std::string & wsock_path) {
     /* specify which file you want to read */
     // std::string file_to_use = "testmesh.json";
     // std::string file_to_use = "blueprint_box.json";
-    std::string file_to_use = "blueprint_mesh_fields.json";
+    // std::string file_to_use = "blueprint_mesh_fields.json";
+    std::string file_to_use = "compressed_blueprint_mesh.json";
     std::string example_blueprint_mesh_path = utils::join_file_path(wsock_path,
                                                          file_to_use);
     std::ifstream blueprint(example_blueprint_mesh_path);
@@ -222,7 +209,7 @@ TEST(conduit_relay_web_websocket, websocket_test)
     Node new_blueprint_node;
     int initial_data = 0;
 
-    // svr.websocket()->send(braid_node);
+    // svr.websocket()->send(blueprint_node);
 
     while(svr.is_running()) 
     {
