@@ -74,7 +74,12 @@ Node generate_normal_update_node(Node & new_node) {
     update_node[pos[0]]["value"] = new_node["coordsets/coords/values"][pos[0]].as_double_array();
     update_node[pos[1]]["value"] = new_node["coordsets/coords/values"][pos[1]].as_double_array();
     //add field values
-    update_node["field_value"] = new_node["fields"]["braid"]["values"].as_double_array();
+    if(new_node["fields"].has_child("braid")) {
+        update_node["field_value"]["braid"] = new_node["fields"]["braid"]["values"].as_double_array();
+    }
+    if(new_node["fields"].has_child("radial")) {
+        update_node["field_value"]["radial"] = new_node["fields"]["radial"]["values"].as_double_array();   
+    }
     return update_node;
 }
 
@@ -98,9 +103,9 @@ bool verify_node_format(Node & blueprint_node) {
         return false;
     }
     //make sure its field is braid
-    if(!(blueprint_node["fields"].has_child("braid")))
+    if(!(blueprint_node["fields"].has_child("braid")||blueprint_node["fields"].has_child("radial")))
     {
-        std::cout << "Not yet supported, blueprint mesh does not have field braid." << std::endl;
+        std::cout << "Not yet supported, blueprint mesh does not have braid or radial type." << std::endl;
         return false;   
     }
     if(blueprint_node["coordsets"]["coords"]["values"].number_of_children() != 2) 
@@ -143,7 +148,7 @@ void generate_node_from_json(Node & blueprint_node, std::string & wsock_path) {
 //Needs to implement after building with HDF5 support.
 void generate_node_from_hdf5(Node & blueprint_node, std::string & wsock_path)
 {
-    conduit::blueprint::mesh::examples::braid("quads", 20, 20, 1, blueprint_node);
+    conduit::blueprint::mesh::examples::braid("quads", 200, 200, 1, blueprint_node);
 }
 
 TEST(conduit_relay_web_websocket, websocket_test)
