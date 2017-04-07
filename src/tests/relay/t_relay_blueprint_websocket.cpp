@@ -57,29 +57,19 @@ Node simulate(Node & blueprint_node) {
 Node generate_normal_update_node(Node & new_node) {
     Node update_node;
     update_node["normal_update"] = 1;
+    
     //add connectivity values
-    Node temp_conn = new_node["topologies/mesh/elements/connectivity"];
-    if(temp_conn.dtype().id() == DataType::INT32_ID) {
-        update_node["conn_value"] = temp_conn.as_int_array();    
-    } else if (temp_conn.dtype().id() == DataType::INT64_ID) {
-        update_node["conn_value"] = temp_conn.as_int64_array();    
-    } else {
-        std::cout<<"connectivity array data format is not supported."<<std::endl;
-        std::cout<<"omit update..."<<std::endl;
-        return update_node;
-    }
+    update_node["conn_value"] = new_node["topologies/mesh/elements/connectivity"];
+
     //add 2D-coords values
     std::vector<std::string> pos;
     pos = get_coord_type(new_node);
-    update_node[pos[0]]["value"] = new_node["coordsets/coords/values"][pos[0]].as_double_array();
-    update_node[pos[1]]["value"] = new_node["coordsets/coords/values"][pos[1]].as_double_array();
+    update_node[pos[0]] = new_node["coordsets/coords/values"][pos[0]];
+    update_node[pos[1]] = new_node["coordsets/coords/values"][pos[1]];
+    
     //add field values
-    if(new_node["fields"].has_child("braid")) {
-        update_node["field_value"]["braid"] = new_node["fields"]["braid"]["values"].as_double_array();
-    }
-    if(new_node["fields"].has_child("radial")) {
-        update_node["field_value"]["radial"] = new_node["fields"]["radial"]["values"].as_double_array();   
-    }
+    update_node["fields"] = new_node["fields"];
+
     return update_node;
 }
 
