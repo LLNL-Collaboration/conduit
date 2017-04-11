@@ -124,11 +124,10 @@ void generate_node_from_json(Node & blueprint_node, std::string & wsock_path) {
     /* specify which file you want to read */
     // std::string file_to_use = "testmesh.json";
     // std::string file_to_use = "blueprint_box.json";
-    // std::string file_to_use = "blueprint_mesh_fields.json";
+    //std::string file_to_use = "blueprint_mesh_fields.json";
     std::string file_to_use = "compressed_blueprint_mesh.json";
-    std::string example_blueprint_mesh_path = utils::join_file_path(wsock_path,
-                                                         file_to_use);
-    std::ifstream blueprint(example_blueprint_mesh_path);
+    std::string example_blueprint_mesh_path = utils::join_file_path(wsock_path, file_to_use);
+    std::ifstream blueprint(example_blueprint_mesh_path.c_str());
     std::stringstream buffer;
     buffer << blueprint.rdbuf();
     Generator g(buffer.str(), "json", NULL);
@@ -197,6 +196,7 @@ TEST(conduit_relay_web_websocket, websocket_test)
         svr.set_htpasswd_auth_file(auth_file);
     }
 
+    svr.set_bind_address("0.0.0.0");
     svr.set_port(8081);
     svr.set_document_root(wsock_path);        
     svr.serve();
