@@ -2,11 +2,7 @@
 #include "conduit_relay_hdf5.hpp"
 #include "conduit_blueprint.hpp"
 #include "hdf5.h"
-#include <iostream>
-#include <fstream>
-#include <sstream>
 #include <vector>
-#include "gtest/gtest.h"
 
 #include "t_config.hpp"
 
@@ -15,60 +11,109 @@ using namespace conduit::utils;
 using namespace conduit::relay;
 
 
-bool launch_server = false;
-bool use_ssl       = false;
-bool use_auth      = false;
-bool read_hdf5     = false;
-bool read_json     = false;
-
-Node simulate(Node & blueprint_node);
-Node generate_normal_update_node(Node & new_node);
-bool verify_node_format(Node & blueprint_node);
-std::vector<std::string> get_coord_type(Node & blueprint_node);
-void generate_node_from_json(Node & blueprint_node);
-void generate_node_from_hdf5(Node & blueprint_node);
-bool verify_node_format(Node & blueprint_node);
+bool launch_server        = false;
+bool use_ssl              = false;
+bool use_auth             = false;
+bool read_default         = false;
+int port                  = 8081;
+int sleep_between_updates = 1000;
+std::string address       = "127.0.0.1";
+std::string datapath      = "";
 
 
+Node simulate_node;
+int simulation_counter = 0;
 
-Node simulate(Node & blueprint_node) {
-    Node new_node;
-    //make a hard copy of the original blueprint_node;
-    new_node.update(blueprint_node);
+std::vector<std::string> getFieldTypes(Node & blueprint_node) 
+{
+    std::vector<std::string> fieldTypes;
+    NodeConstIterator itr = blueprint_node["fields"].children();
+    while(itr.has_next())
+    {
+        itr.next();
+        fieldTypes.push_back(itr.name());
+    }
+    return fieldTypes;
+}
+
+std::vector<std::string> get_coord_type(Node & blueprint_node) 
+{
+    std::vector<std::string> pos; 
+    if(blueprint_node["coordsets/coords/values"].has_child("x")) 
+    {
+        pos.push_back(std::string("x"));
+        pos.push_back(std::string("y"));
+    }
+    else 
+    {
+        pos.push_back(std::string("z"));
+        pos.push_back(std::string("r"));
+    }
+    return pos;
+}
+
+void simulate(Node & blueprint_node, std::string & fieldType) 
+{
     std::vector<std::string> pos;
     pos = get_coord_type(blueprint_node);
-    //shift r position by +1
-    float64 *new_r_ptr = new_node["coordsets"]["coords"]["values"][pos[1]].as_float64_ptr();
-    index_t r_length = new_node["coordsets"]["coords"]["values"][pos[1]].dtype().number_of_elements();
-    for(index_t i = 0; i < r_length; i++) {
-            new_r_ptr[i] = new_r_ptr[i] + 1.0;
+
+    float64 *new_r_ptr = blueprint_node["coordsets/coords/values"][pos[1]].as_float64_ptr();
+    float64 *new_z_ptr = blueprint_node["coordsets/coords/values"][pos[0]].as_float64_ptr();
+    index_t r_length = blueprint_node["coordsets/coords/values"][pos[1]].dtype().number_of_elements();
+    //shift coordinates of the mesh in some way
+    for(index_t i = 0; i < r_length; i++) 
+    {
+        if(simulation_counter/4 == 0) 
+        {
+            new_z_ptr[i] = new_z_ptr[i] - 4.0;
+        }
+        else if(simulation_counter/4 == 1) 
+        {
+            new_r_ptr[i] = new_r_ptr[i] + 4.0;
+        }
+        else if(simulation_counter/4 == 2) 
+        {
+            new_z_ptr[i] = new_z_ptr[i] + 4.0;   
+        }
+        else if(simulation_counter/4 == 3) 
+        {
+            new_r_ptr[i] = new_r_ptr[i] - 4.0;   
+        }
+        else 
+        {
+            simulation_counter = simulation_counter - 16;
+        }
     }
 
     //change the field value for the center of the mesh
-    float64 *new_field_ptr = new_node["fields"]["braid"]["values"].as_float64_ptr();
-    index_t field_length = (index_t) new_node["fields"]["braid"]["values"].dtype().number_of_elements();
-    for(index_t i = 0; i < field_length; i++) {
+    float64 *new_field_ptr = blueprint_node["fields"][fieldType]["values"].as_float64_ptr();
+    index_t field_length = (index_t) blueprint_node["fields"][fieldType]["values"].dtype().number_of_elements();
+    for(index_t i = 0; i < field_length; i++) 
+    {
         if(i >= field_length*1.0/3 && i <= field_length*2.0/3)
             new_field_ptr[i] = 1.05*new_field_ptr[i];
     }
-    return new_node;
+    simulation_counter++;
 }
+
+
 //in normal update, we will send the entire new connectivity, r, z, or field arrays
-Node generate_normal_update_node(Node & new_node) {
+Node generate_normal_update_node(Node & new_node) 
+{
     Node update_node;
     update_node["normal_update"] = 1;
     
     //add connectivity values
-    update_node["conn_value"] = new_node["topologies/mesh/elements/connectivity"];
+    update_node["conn_value"].set_external(new_node["topologies/mesh/elements/connectivity"]);
 
     //add 2D-coords values
     std::vector<std::string> pos;
     pos = get_coord_type(new_node);
-    update_node[pos[0]] = new_node["coordsets/coords/values"][pos[0]];
-    update_node[pos[1]] = new_node["coordsets/coords/values"][pos[1]];
+    update_node["coords"][pos[0]].set_external(new_node["coordsets/coords/values"][pos[0]]);
+    update_node["coords"][pos[1]].set_external(new_node["coordsets/coords/values"][pos[1]]);
     
     //add field values
-    update_node["fields"] = new_node["fields"];
+    update_node["fields"].set_external(new_node["fields"]);
 
     return update_node;
 }
@@ -76,9 +121,10 @@ Node generate_normal_update_node(Node & new_node) {
 /*
 This function verifies whether the input node conforms to blueprint format
 */
-bool verify_node_format(Node & blueprint_node) {
+bool verify_node_format(Node & blueprint_node) 
+{
     Node info;
-    // blueprint_node.print();
+
     //make sure the data format is in blueprint mesh
     if(!conduit::blueprint::verify("mesh", blueprint_node, info)) 
     {
@@ -86,61 +132,114 @@ bool verify_node_format(Node & blueprint_node) {
         info.print();
         return false;
     }
-    //make sure its shape is quad
-    if(!(blueprint_node["topologies"]["mesh"]["elements"]["shape"].as_string() == std::string("quad")))
-    {
-        std::cout << "Not yet supported, blueprint mesh does not have shape quad." << std::endl;
-        return false;
-    }
-    //make sure its field is braid
-    if(!(blueprint_node["fields"].has_child("braid")||blueprint_node["fields"].has_child("radial")))
-    {
-        std::cout << "Not yet supported, blueprint mesh does not have braid or radial type." << std::endl;
-        return false;   
-    }
-    if(blueprint_node["coordsets"]["coords"]["values"].number_of_children() != 2) 
-    {
-        std::cout << "Not yet supported, server only supports 2D rendering." <<std::endl;
-        return false;
-    }
     std::cout <<"Input format is supported. Launch server!!" <<std::endl;
     return true;
 }
 
-std::vector<std::string> get_coord_type(Node & blueprint_node) {
-    std::vector<std::string> pos; 
-    if(blueprint_node["coordsets"]["coords"]["values"].has_child("x")) {
-        pos.push_back(std::string("x"));
-        pos.push_back(std::string("y"));
-    }
-    else {
-        pos.push_back(std::string("z"));
-        pos.push_back(std::string("r"));
-    }
-    return pos;
+void generate_node_from_datapath(Node & blueprint_node) 
+{
+    io::load(datapath, blueprint_node);
 }
 
-void generate_node_from_json(Node & blueprint_node, std::string & wsock_path) {
-    /* specify which file you want to read */
-    // std::string file_to_use = "testmesh.json";
-    // std::string file_to_use = "blueprint_box.json";
-    //std::string file_to_use = "blueprint_mesh_fields.json";
-    std::string file_to_use = "compressed_blueprint_mesh.json";
-    std::string example_blueprint_mesh_path = utils::join_file_path(wsock_path, file_to_use);
-    std::ifstream blueprint(example_blueprint_mesh_path.c_str());
-    std::stringstream buffer;
-    buffer << blueprint.rdbuf();
-    Generator g(buffer.str(), "json", NULL);
-    g.walk(blueprint_node);
-}
-
-//Needs to implement after building with HDF5 support.
-void generate_node_from_hdf5(Node & blueprint_node, std::string & wsock_path)
+void generate_node_in_runtime(Node & blueprint_node)
 {
     conduit::blueprint::mesh::examples::braid("quads", 200, 200, 1, blueprint_node);
 }
 
-TEST(conduit_relay_web_websocket, websocket_test)
+
+void usage()
+{
+    std::cout << "usage: t_relay_blueprint_websocket"
+              << std::endl << std::endl 
+              << " arguments:" 
+              << std::endl
+              << "  launch"
+              << std::endl
+              << "  ssl"
+              << std::endl
+              << "  auth"
+              << std::endl
+              << "  default_data"
+              << std::endl
+              << " optional arguments:"
+              << std::endl
+              << "  --address {ip address to bind to (default=127.0.0.1)}" 
+              << std::endl
+              << "  --port {port number to serve on (default=8081)}" 
+              << std::endl
+              << "  --datapath {path to the data file}"
+              << std::endl
+              << "  --sleep_between_updates {sleep time between updates (default = 1000)}"
+              << std::endl
+              << std::endl << std::endl;
+
+}
+
+void parse_args(int argc, char *argv[])
+{
+    for(int i=0; i < argc ; i++)
+    {
+        std::string arg_str(argv[i]);
+        if(arg_str == "launch")
+        {
+            // actually launch the server
+            launch_server = true;
+        }
+        else if(arg_str == "ssl")
+        {
+            // test using ssl server cert
+            use_ssl = true;
+        }
+        else if(arg_str == "auth")
+        {
+            // test using htpasswd auth
+            // the user name and password for this example are both "test"
+            use_auth = true;
+        }
+        else if(arg_str == "default_data")
+        {
+            read_default = true;
+        }
+        else if(arg_str == "--port")
+        {
+            if(i+1 >= argc)
+            {
+                CONDUIT_ERROR("expected value following --port option");
+            }
+            port = atoi(argv[i+1]);
+            i++;
+        }
+        else if(arg_str == "--address")
+        {
+            if(i+1 >= argc)
+            {
+                CONDUIT_ERROR("expected value following --address option");
+            }
+            address = std::string(argv[i+1]);
+            i++;  
+        }
+        else if(arg_str == "--datapath")
+        {
+            if(i+1 >= argc)
+            {
+                CONDUIT_ERROR("expected value following --datapath option");
+            }
+            datapath = std::string(argv[i+1]);
+            i++;      
+        }
+        else if(arg_str == "--sleep_between_updates")
+        {
+            if(i+1 >= argc)
+            {
+                CONDUIT_ERROR("expected value following --sleep_between_updates option");
+            }
+            sleep_between_updates = atoi(argv[i+1]);
+            i++;
+        }
+    }
+}
+
+void run()
 {
     if(! launch_server)
     {
@@ -149,31 +248,21 @@ TEST(conduit_relay_web_websocket, websocket_test)
     }
 
     Node blueprint_node;
-    // setup the webserver
     web::WebServer svr;
-    std::string wsock_path = utils::join_file_path(web::web_client_root_directory(),
-                                                   "blueprint_websocket");
 
+    if(read_default)
+    {
+        generate_node_in_runtime(blueprint_node);
+    }
+    else if(!datapath.empty()) 
+    {
+        generate_node_from_datapath(blueprint_node);
+    }
+    else
+    {
+        CONDUIT_ERROR("no data read");
+    }
 
-    if(!read_hdf5 && !read_json)
-    {
-        std::cout<<"No input format specified. Please choose one from <hdf5_test> or <json_test>."<<std::endl;
-        return;
-    }
-    else if (read_hdf5 && read_json)
-    {
-        std::cout<<"Cannot handle two input formats at once. Please choose one Please choose one from <hdf5_test> or <json_test>."<<std::endl;
-        return;
-    }
-    else if (read_json) 
-    {
-        generate_node_from_json(blueprint_node, wsock_path);
-    }
-    else if (read_hdf5)
-    {
-        generate_node_from_hdf5(blueprint_node, wsock_path);
-    }
-    // blueprint_node.print();
 
     if(!verify_node_format(blueprint_node))
     {
@@ -196,132 +285,57 @@ TEST(conduit_relay_web_websocket, websocket_test)
         svr.set_htpasswd_auth_file(auth_file);
     }
 
-    svr.set_bind_address("0.0.0.0");
-    svr.set_port(8081);
-    svr.set_document_root(wsock_path);        
+
+    svr.set_port(port);
+    svr.set_bind_address(address);
+    svr.set_document_root(web::web_client_root_directory());
     svr.serve();
 
     Node new_blueprint_node;
-    int initial_data = 0;
+    std::vector<std::string> fieldTypes = getFieldTypes(blueprint_node);
+    bool initial_data = true;
 
-    // svr.websocket()->send(blueprint_node);
 
     while(svr.is_running()) 
     {
         // send the initial copy
-        if(!initial_data) {
+        if(initial_data) 
+        {
             // websocket() returns the first active websocket
             svr.websocket()->send(blueprint_node);
-            initial_data = 1;        
+            initial_data = false;        
+        } 
+        else 
+        {
+            utils::sleep(sleep_between_updates);
+            simulate(blueprint_node, fieldTypes[0]);
+            svr.websocket()->send(generate_normal_update_node(blueprint_node));            
         }
-        utils::sleep(2000);
-        //Update blueprint node simulation.
-        new_blueprint_node.update(simulate(blueprint_node));
-        // svr.websocket()->send(generate_compressed_update_node(blueprint_node, new_blueprint_node));
-        svr.websocket()->send(generate_normal_update_node(new_blueprint_node));
-        blueprint_node.update(new_blueprint_node);
-        
     }
 }
-
 
 //-----------------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
-    int result = 0;
-
-    ::testing::InitGoogleTest(&argc, argv);
-
-    for(int i=0; i < argc ; i++)
+    try
     {
-        std::string arg_str(argv[i]);
-        if(arg_str == "launch")
+        int result = 0;
+        if (argc == 1)
         {
-            // actually launch the server
-            launch_server = true;
+            usage();
+            return -1;
         }
-        else if(arg_str == "ssl")
-        {
-            // test using ssl server cert
-            use_ssl = true;
-        }
-        else if(arg_str == "auth")
-        {
-            // test using htpasswd auth
-            // the user name and password for this example are both "test"
-            use_auth = true;
-        }
-        else if(arg_str == "hdf5_test")
-        {
-            read_hdf5 = true;
-        }
-        else if(arg_str == "json_test")
-        {
-            read_json = true;
-        }
+        parse_args(argc, argv);
+        run();
+    }
+    catch(const conduit::Error &e)
+    {
+        std::cout << "Error launching Conduit Relay Websocket Server:"
+                  << std::endl
+                  << e.message()
+                  << std::endl;
+        return -1;
     }
 
-    result = RUN_ALL_TESTS();
-    return result;
+    return 0;
 }
-
-
-//in compressed update, we minimize the data sent
-/* =======================This function is no longer maintained =======================*/
-// Node generate_compressed_update_node(Node & old_node, Node & new_node) {
-//     Node update_node;
-//     update_node["compressed_update"] = 1;
-//     //compare connectivity 
-//     int64 *old_conn_ptr = old_node["topologies"]["mesh"]["elements"]["connectivity"].as_int64_ptr();
-//     int64 *new_conn_ptr = new_node["topologies"]["mesh"]["elements"]["connectivity"].as_int64_ptr();
-//     index_t conn_length = (index_t) old_node["topologies"]["mesh"]["elements"]["connectivity"].dtype().number_of_elements();
-//     std::vector<int64> conn_changed_index;
-//     std::vector<int64> conn_changed_value;
-//     for(index_t i = 0; i < conn_length; i++) {
-//         if(old_conn_ptr[i] != new_conn_ptr[i]) {
-//             conn_changed_index.push_back(i);
-//             conn_changed_value.push_back(new_conn_ptr[i]);
-//         }
-//     }
-//     if(conn_changed_index.size()) {
-//         update_node["conn_index"] = conn_changed_index;
-//         update_node["conn_value"] = conn_changed_value;        
-//     }
-//     //compare r, z
-
-//     std::vector<int64> r_changed_index;
-//     std::vector<float64> r_changed_value;
-//     std::vector<int64> z_changed_index;
-//     std::vector<float64> z_changed_value;
-//     float64 *old_r_ptr = old_node["coordsets"]["coords"]["values"]["r"].as_float64_ptr();
-//     float64 *new_r_ptr = new_node["coordsets"]["coords"]["values"]["r"].as_float64_ptr();
-//     float64 *old_z_ptr = old_node["coordsets"]["coords"]["values"]["z"].as_float64_ptr();
-//     float64 *new_z_ptr = new_node["coordsets"]["coords"]["values"]["z"].as_float64_ptr();
-//     index_t rz_length = (index_t) old_node["coordsets"]["coords"]["values"]["z"].dtype().number_of_elements();
-//     for(index_t i = 0; i < rz_length; i++) {
-//         if(old_r_ptr[i] != new_r_ptr[i]) {
-//             r_changed_index.push_back(i);
-//             r_changed_value.push_back(new_r_ptr[i]);
-//         }
-//         if(old_z_ptr[i] != new_z_ptr[i]) {
-//             z_changed_index.push_back(i);
-//             z_changed_value.push_back(new_z_ptr[i]);
-//         }
-//     }
-//     if(r_changed_index.size()) {
-//         update_node["r"]["index"] = r_changed_index;
-//         update_node["r"]["value"] = r_changed_value;        
-//     }
-//     if(z_changed_index.size()) {
-//         update_node["z"]["index"] = z_changed_index;
-//         update_node["z"]["value"] = z_changed_value;        
-//     }
-//     // update_node.print();
-//     // float64 *u_ptr = update_node["r"]["value"].as_float64_ptr();
-//     // for (int i = 0; i < 10; ++i)
-//     // {
-//     //     std::cout<< u_ptr[i]<<std::endl;
-//     // }
-//     return update_node;
-// }
-
